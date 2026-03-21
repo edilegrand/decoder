@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Car Loan Calculator Pro</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: { 50: '#eff6ff', 100: '#dbeafe', 500: '#3b82f6', 600: '#2563eb', 900: '#1e3a8a' }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- React & Babel -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        /* Custom Scrollbar for the table */
+        .custom-scrollbar::-webkit-scrollbar { height: 8px; width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #475569; }
+        
+        /* Smooth transitions */
+        * { transition: background-color 0.3s ease, border-color 0.3s ease; }
+        input, select { transition: none; }
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-gray-100 min-h-screen">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+
+        // --- ICONS & TOOLTIPS ---
+        const HelpTooltip = ({ text }) => (
+            <div className="group relative inline-block ml-2 cursor-pointer touch-manipulation focus:outline-none" tabIndex="0">
+                <svg className="w-4 h-4 text-gray-400 hover:text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <div className="invisible opacity-0 group-hover:visible group-hover:opacity-100 group-focus:visible group-focus:opacity-100 transition-all absolute z-50 w-56 p-3 text-xs leading-5 bg-gray-900 dark:bg-black text-white rounded-lg shadow-xl bottom-full left-1/2 -translate-x-1/2 mb-2 pointer-events-none">
+                    {text}
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-black"></div>
+                </div>
+            </div>
+        );
+
+        // --- CUSTOM INPUT COMPONENT (Format on Blur) ---
+        const NumberInput = ({ label, value, onChange, tooltip, prefix, suffix, placeholder }) => {
+            const [isFocused, setIsFocused] = useState(false);
+            const [localVal, setLocalVal] = useState(value ? value.toString() : '');
+
+            useEffect(() => {
+                if (!isFocused) {
+                    setLocalVal(value ? value.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '');
+                }
+            }, [value, isFocused]);
+
+            useEffect(() => {
+                setLocalVal(value ? value.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '');
+            }, [value]);
+
+            const handleChange = (e) => {
+                let val = e.target.value.replace(/[^0-9.]/g, ''); // Strip invalid chars
+                if (val.split('.').length > 2) val = val.replace(/\.+$/, ''); // Prevent double decimals
+                setLocalVal(val);
+                onChange(val === '' ? 0 : parseFloat(val));
+            };
+
+            return (
+                <div className="flex flex-col mb-4">
+                    <label className="text-sm font-semibold flex items-center mb-1 text-gray-700 dark:text-gray-300">
+                        {label} {tooltip && <HelpTooltip text={tooltip} />}
+                    </label>
+                    <div className="relative flex items-center">
+                        {prefix && <span className="absolute left-3 text-gray-500 font-medium">{prefix}</span>}
+                        <input
+                            type="text"
+                            className={`w-full p-2.5 border rounded-xl bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-600 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none text-gray-900 dark:text-white shadow-sm ${prefix ? 'pl-8' : ''} ${suffix ? 'pr-8' : ''}`}
+                            value={localVal}
+                            onChange={handleChange}
+                            onFocus={() => { setIsFocused(true); setLocalVal(value ? value.toString() : ''); }}
+                            onBlur={() => setIsFocused(false)}
+                            placeholder={placeholder}
+                        />
+                        {suffix && <span className="absolute right-3 text-gray-500 font-medium">{suffix}</span>}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- MAIN APP COMPONENT ---
+        const App = () => {
+            // Theme state
+            const [isDark, setIsDark] = useState(false);
+
+            useEffect(() => {
+                const saved = localStorage.getItem('theme');
+                if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                    setIsDark(true);
+                    document.documentElement.classList.add('dark');
+                }
+            }, []);
+
+            const toggleTheme = () => {
+                setIsDark(!isDark);
+                if (!isDark) {
+                    document.documentElement.classList.add('dark');
+                    localStorage.setItem('theme', 'dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.setItem('theme', 'light');
+                }
+            };
+
+            const defaultInputs = {
+                price: 35000, downPayment: 5000, tradeIn: 0, owedTradeIn: 0,
+                salesTax: 7, apr: 5.5, termLength: 60, termUnit: 'months', paymentFrequency: 'monthly',
+                loanType: 'amortizing',
+                titleFee: 300, dealerFee: 500, warranty: 0, otherFee: 0,
+                incentives: 0, extraPayment: 0, startDate: new Date().toISOString().split('T')[0],
+                compoundFreq: 'monthly'
+            };
+
+            const emptyInputs = {
+                price: '', downPayment: '', tradeIn: '', owedTradeIn: '',
+                salesTax: '', apr: '', termLength: '', termUnit: 'months', paymentFrequency: 'monthly',
+                loanType: 'amortizing',
+                titleFee: '', dealerFee: '', warranty: '', otherFee: '',
+                incentives: '', extraPayment: '', startDate: new Date().toISOString().split('T')[0],
+                compoundFreq: 'monthly'
+            };
+
+            const [inputs, setInputs] = useState(defaultInputs);
+            const [showAdvanced, setShowAdvanced] = useState(false);
+
+            const updateInput = (key, val) => setInputs(prev => ({ ...prev, [key]: val }));
+            const resetAll = () => setInputs(emptyInputs);
+
+            // --- CALCULATION ENGINE ---
+            const calculateLoan = (data) => {
+                const { price, downPayment, tradeIn, owedTradeIn, salesTax, apr, termLength, termUnit, paymentFrequency, loanType, titleFee, dealerFee, warranty, otherFee, incentives, extraPayment, startDate, compoundFreq } = data;
+
+                const p = price || 0;
+                const dp = downPayment || 0;
+                const ti = tradeIn || 0;
+                const oti = owedTradeIn || 0;
+                const st = salesTax || 0;
+                const a = apr || 0;
+                const tl = termLength || 0;
+                const tf = titleFee || 0;
+                const df = dealerFee || 0;
+                const w = warranty || 0;
+                const of = otherFee || 0;
+                const inc = incentives || 0;
+                const ep = extraPayment || 0;
+
+                // 1. Core Loan Setup
+                const taxableAmount = Math.max(0, p - ti);
+                const taxAmount = taxableAmount * (st / 100);
+                const totalFees = tf + df + w + of;
+                const loanAmount = p - dp - ti + oti + taxAmount + totalFees - inc;
+
+                if (loanAmount <= 0 || !tl || tl <= 0) return null;
+
+                // 2. Timing Parameters
+                const payFreqMap = { 'daily': 365, 'weekly': 52, 'biweekly': 26, 'monthly': 12, 'quarterly': 4, 'semiannually': 2, 'annually': 1 };
+                const paymentsPerYear = payFreqMap[paymentFrequency];
+                const years = termUnit === 'years' ? tl : tl / 12;
+                const totalPeriods = Math.round(years * paymentsPerYear);
+                
+                // 3. Rate calculations (handling compounding differences)
+                const compFreqMap = { 'daily': 365, 'weekly': 52, 'biweekly': 26, 'monthly': 12, 'quarterly': 4, 'semiannually': 2, 'annually': 1 };
+                const compoundsPerYear = compFreqMap[compoundFreq] || 12;
+                
+                let r;
+                if (a === 0) {
+                    r = 0;
+                } else {
+                    // Effective periodic rate if compounding frequency != payment frequency
+                    r = Math.pow(1 + (a / 100 / compoundsPerYear), compoundsPerYear / paymentsPerYear) - 1;
+                }
+
+                // 4. Base Payment
+                let pmt = 0;
+                if (r === 0) {
+                    pmt = loanAmount / totalPeriods;
+                } else if (loanType === 'interestOnly') {
+                    pmt = loanAmount * r;
+                } else {
+                    pmt = loanAmount * (r / (1 - Math.pow(1 + r, -totalPeriods)));
+                }
+
+                // 5. Amortization Generation
+                let balance = loanAmount;
+                let totalInterest = 0;
+                let schedule = [];
+                let date = new Date(startDate);
+
+                for (let i = 1; i <= totalPeriods * 3; i++) { // cap iterations safety net
+                    if (balance <= 0.001) break;
+
+                    let interest = balance * r;
+                    let principal = pmt - interest + ep;
+
+                    if (loanType === 'interestOnly') {
+                        principal = ep; // Principal only drops if extra payment made
+                    }
+
+                    if (balance < principal) {
+                        principal = balance;
+                        pmt = principal + interest; // Adjust final payment
+                    }
+
+                    balance -= principal;
+                    totalInterest += interest;
+
+                    // Increment date
+                    if (paymentFrequency === 'daily') date.setDate(date.getDate() + 1);
+                    else if (paymentFrequency === 'weekly') date.setDate(date.getDate() + 7);
+                    else if (paymentFrequency === 'biweekly') date.setDate(date.getDate() + 14);
+                    else if (paymentFrequency === 'monthly') date.setMonth(date.getMonth() + 1);
+                    else if (paymentFrequency === 'quarterly') date.setMonth(date.getMonth() + 3);
+                    else if (paymentFrequency === 'semiannually') date.setMonth(date.getMonth() + 6);
+                    else if (paymentFrequency === 'annually') date.setMonth(date.getMonth() + 12);
+
+                    schedule.push({
+                        period: i,
+                        date: new Date(date),
+                        payment: principal + interest,
+                        principal,
+                        interest,
+                        balance: Math.max(0, balance)
+                    });
+
+                    // Break if paid off
+                    if (balance <= 0) break;
+                    // Break if interest only and term ends
+                    if (loanType === 'interestOnly' && i === totalPeriods && ep === 0) {
+                        schedule.push({ period: i+1, date: new Date(date), payment: balance, principal: balance, interest: 0, balance: 0, note: "Balloon Payment" });
+                        break;
+                    }
+                }
+
+                return {
+                    loanAmount,
+                    periodicPayment: schedule.length > 0 ? (loanType === 'interestOnly' ? pmt : schedule[0].payment - ep) : 0,
+                    totalInterest,
+                    totalCost: loanAmount + totalInterest,
+                    payoffDate: schedule.length > 0 ? schedule[schedule.length - 1].date : date,
+                    schedule
+                };
+            };
+
+            const results = useMemo(() => calculateLoan(inputs), [inputs]);
+            
+            // Savings Insights Calculation
+            const savings = useMemo(() => {
+                if (inputs.extraPayment > 0 && results) {
+                    const baseResults = calculateLoan({ ...inputs, extraPayment: 0 });
+                    if(baseResults) {
+                        return {
+                            interestSaved: baseResults.totalInterest - results.totalInterest,
+                            periodsSaved: baseResults.schedule.length - results.schedule.length
+                        };
+                    }
+                }
+                return null;
+            }, [inputs, results]);
+
+            // CSV Export
+            const exportCSV = () => {
+                if (!results) return;
+                let csv = "Payment Number,Date,Payment Amount,Principal Paid,Interest Paid,Remaining Balance\n";
+                results.schedule.forEach(row => {
+                    csv += `${row.period},${row.date.toLocaleDateString()},${row.payment.toFixed(2)},${row.principal.toFixed(2)},${row.interest.toFixed(2)},${row.balance.toFixed(2)}\n`;
+                });
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.setAttribute('href', url);
+                a.setAttribute('download', 'auto_loan_amortization.csv');
+                a.click();
+            };
+
+            // --- CHARTS COMPONENT ---
+            const ChartsRenderer = ({ results, isDark }) => {
+                const pieRef = useRef(null);
+                const lineRef = useRef(null);
+                const barRef = useRef(null);
+                const charts = useRef({});
+
+                useEffect(() => {
+                    if (!results) return;
+                    
+                    const textColor = isDark ? '#e2e8f0' : '#334155';
+                    const gridColor = isDark ? '#334155' : '#e2e8f0';
+
+                    Chart.defaults.color = textColor;
+                    Chart.defaults.scale.grid.color = gridColor;
+
+                    // PIE CHART
+                    if (charts.current.pie) charts.current.pie.destroy();
+                    charts.current.pie = new Chart(pieRef.current, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['Principal', 'Interest'],
+                            datasets: [{
+                                data: [results.loanAmount, results.totalInterest],
+                                backgroundColor: ['#3b82f6', '#f43f5e'],
+                                borderWidth: 0
+                            }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom' } } }
+                    });
+
+                    // LINE CHART (Balance)
+                    if (charts.current.line) charts.current.line.destroy();
+                    charts.current.line = new Chart(lineRef.current, {
+                        type: 'line',
+                        data: {
+                            labels: results.schedule.map(s => s.period),
+                            datasets: [{
+                                label: 'Remaining Balance ($)',
+                                data: results.schedule.map(s => s.balance),
+                                borderColor: '#8b5cf6',
+                                backgroundColor: 'rgba(139, 92, 246, 0.2)',
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 0
+                            }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false } }
+                    });
+
+                    // BAR CHART (Interest vs Principal per payment)
+                    if (charts.current.bar) charts.current.bar.destroy();
+                    // Downsample bar chart if too many periods
+                    const step = Math.max(1, Math.floor(results.schedule.length / 50));
+                    const barData = results.schedule.filter((_, i) => i % step === 0);
+
+                    charts.current.bar = new Chart(barRef.current, {
+                        type: 'bar',
+                        data: {
+                            labels: barData.map(s => `Pmt ${s.period}`),
+                            datasets: [
+                                { label: 'Principal', data: barData.map(s => s.principal), backgroundColor: '#3b82f6' },
+                                { label: 'Interest', data: barData.map(s => s.interest), backgroundColor: '#f43f5e' }
+                            ]
+                        },
+                        options: {
+                            responsive: true, maintainAspectRatio: false,
+                            scales: { x: { stacked: true }, y: { stacked: true } }
+                        }
+                    });
+
+                    return () => {
+                        Object.values(charts.current).forEach(c => c?.destroy());
+                    };
+                }, [results, isDark]);
+
+                return (
+                    <div className="mt-8 space-y-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="bg-gray-50 dark:bg-slate-700/50 p-4 rounded-2xl border border-gray-100 dark:border-slate-600 h-64">
+                                <h3 className="text-center text-sm font-semibold mb-2">Cost Breakdown</h3>
+                                <canvas ref={pieRef}></canvas>
+                            </div>
+                            <div className="bg-gray-50 dark:bg-slate-700/50 p-4 rounded-2xl border border-gray-100 dark:border-slate-600 h-64">
+                                <h3 className="text-center text-sm font-semibold mb-2">Principal vs Interest</h3>
+                                <canvas ref={barRef}></canvas>
+                            </div>
+                        </div>
+                        <div className="bg-gray-50 dark:bg-slate-700/50 p-4 rounded-2xl border border-gray-100 dark:border-slate-600 h-72">
+                            <h3 className="text-center text-sm font-semibold mb-2">Remaining Balance Over Time</h3>
+                            <canvas ref={lineRef}></canvas>
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="max-w-7xl mx-auto px-4 py-8">
+                    {/* Header */}
+                    <div className="flex justify-between items-center mb-8">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-brand-500 rounded-xl flex items-center justify-center shadow-lg shadow-brand-500/30">
+                                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <h1 className="text-2xl font-bold tracking-tight">Car Loan Calculator <span className="text-brand-500">Pro</span></h1>
+                        </div>
+                        <button onClick={toggleTheme} className="p-2.5 rounded-full bg-white dark:bg-slate-800 shadow-sm border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 focus:outline-none">
+                            {isDark ? 
+                                <svg className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"/></svg>
+                                : <svg className="w-5 h-5 text-slate-600" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
+                            }
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                        {/* --- INPUT PANEL --- */}
+                        <div className="lg:col-span-5 space-y-6">
+                            <div className="bg-white dark:bg-slate-800 p-6 sm:p-8 rounded-3xl shadow-xl shadow-gray-200/50 dark:shadow-none border border-gray-100 dark:border-slate-700">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-xl font-bold">Loan Details</h2>
+                                    <button onClick={resetAll} className="text-sm font-medium text-brand-500 hover:text-brand-600 dark:hover:text-brand-400">Reset All</button>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <NumberInput label="Vehicle Price" value={inputs.price} onChange={v => updateInput('price', v)} prefix="$" placeholder="e.g. 35000" tooltip="The total price of the car before taxes and fees." />
+                                    
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <NumberInput label="Down Payment" value={inputs.downPayment} onChange={v => updateInput('downPayment', v)} prefix="$" tooltip="The amount you pay upfront to reduce the loan." />
+                                        <NumberInput label="Trade-in Value" value={inputs.tradeIn} onChange={v => updateInput('tradeIn', v)} prefix="$" tooltip="The value of your current vehicle applied toward the new purchase." />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <NumberInput label="Owed on Trade-in" value={inputs.owedTradeIn} onChange={v => updateInput('owedTradeIn', v)} prefix="$" tooltip="If you still owe money on your current car, this is added to your new loan." />
+                                        <NumberInput label="Sales Tax" value={inputs.salesTax} onChange={v => updateInput('salesTax', v)} suffix="%" tooltip="The percentage charged by your local government on the purchase." />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <NumberInput label="Interest Rate (APR)" value={inputs.apr} onChange={v => updateInput('apr', v)} suffix="%" tooltip="The yearly cost of borrowing money, expressed as a percentage." />
+                                        
+                                        <div className="flex flex-col mb-4">
+                                            <label className="text-sm font-semibold flex items-center mb-1 text-gray-700 dark:text-gray-300">
+                                                Loan Term <HelpTooltip text="The length of time to repay the loan." />
+                                            </label>
+                                            <div className="flex">
+                                                <input type="number" min="1" className="w-2/3 p-2.5 border rounded-l-xl bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-600 focus:ring-2 focus:ring-brand-500 outline-none" value={inputs.termLength} onChange={e => updateInput('termLength', parseFloat(e.target.value) || 0)} />
+                                                <select className="w-1/3 p-2.5 border border-l-0 rounded-r-xl bg-gray-50 dark:bg-slate-700 border-gray-300 dark:border-slate-600 outline-none cursor-pointer" value={inputs.termUnit} onChange={e => updateInput('termUnit', e.target.value)}>
+                                                    <option value="months">Mo</option>
+                                                    <option value="years">Yr</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col mb-4">
+                                        <label className="text-sm font-semibold flex items-center mb-1 text-gray-700 dark:text-gray-300">
+                                            Payment Frequency <HelpTooltip text="How often you make payments." />
+                                        </label>
+                                        <select className="p-2.5 border rounded-xl bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-600 outline-none" value={inputs.paymentFrequency} onChange={e => updateInput('paymentFrequency', e.target.value)}>
+                                            <option value="daily">Daily</option>
+                                            <option value="weekly">Weekly</option>
+                                            <option value="biweekly">Biweekly</option>
+                                            <option value="monthly">Monthly</option>
+                                            <option value="quarterly">Quarterly</option>
+                                            <option value="semiannually">Semiannually</option>
+                                            <option value="annually">Annually</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                {/* Advanced Settings Toggle */}
+                                <div className="mt-6 pt-6 border-t border-gray-100 dark:border-slate-700">
+                                    <button onClick={() => setShowAdvanced(!showAdvanced)} className="w-full flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-gray-300 hover:text-brand-500 transition-colors">
+                                        <span className="flex items-center gap-2">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                            Advanced Options
+                                        </span>
+                                        <svg className={`w-5 h-5 transform transition-transform ${showAdvanced ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                                    </button>
+                                </div>
+
+                                {/* Advanced Settings Content */}
+                                {showAdvanced && (
+                                    <div className="mt-6 space-y-4 animate-fadeIn">
+                                        <div className="flex flex-col mb-4">
+                                            <label className="text-sm font-semibold flex items-center mb-1 text-gray-700 dark:text-gray-300">
+                                                Loan Type <HelpTooltip text="Amortizing pays down principal. Interest Only keeps balance flat." />
+                                            </label>
+                                            <select className="p-2.5 border rounded-xl bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-600 outline-none cursor-pointer" value={inputs.loanType} onChange={e => updateInput('loanType', e.target.value)}>
+                                                <option value="amortizing">Amortizing (Standard)</option>
+                                                <option value="interestOnly">Interest Only</option>
+                                            </select>
+                                        </div>
+
+                                        <h3 className="text-xs font-bold uppercase text-gray-400 tracking-wider">Fees & Extras <HelpTooltip text="Extra costs added to the total loan amount." /></h3>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <NumberInput label="Title & Reg" value={inputs.titleFee} onChange={v => updateInput('titleFee', v)} prefix="$" />
+                                            <NumberInput label="Dealer Fees" value={inputs.dealerFee} onChange={v => updateInput('dealerFee', v)} prefix="$" />
+                                            <NumberInput label="Extended Warranty" value={inputs.warranty} onChange={v => updateInput('warranty', v)} prefix="$" />
+                                            <NumberInput label="Other Fees" value={inputs.otherFee} onChange={v => updateInput('otherFee', v)} prefix="$" />
+                                        </div>
+
+                                        <NumberInput label="Incentives / Rebates" value={inputs.incentives} onChange={v => updateInput('incentives', v)} prefix="$" tooltip="Discounts or cashback that reduce the loan amount." />
+                                        
+                                        <h3 className="text-xs font-bold uppercase text-gray-400 tracking-wider mt-2">Extra & Schedule</h3>
+                                        <NumberInput label="Extra Payment (Per Period)" value={inputs.extraPayment} onChange={v => updateInput('extraPayment', v)} prefix="$" tooltip="Additional payments reduce interest and help pay off the loan faster." />
+                                        
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="flex flex-col mb-4">
+                                                <label className="text-sm font-semibold flex items-center mb-1 text-gray-700 dark:text-gray-300">Start Date</label>
+                                                <input type="date" className="p-2.5 border rounded-xl bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-600 outline-none" value={inputs.startDate} onChange={e => updateInput('startDate', e.target.value)} />
+                                            </div>
+                                            <div className="flex flex-col mb-4">
+                                                <label className="text-sm font-semibold flex items-center mb-1 text-gray-700 dark:text-gray-300">Compound Freq <HelpTooltip text="How often interest is calculated on your loan." /></label>
+                                                <select className="p-2.5 border rounded-xl bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-600 outline-none" value={inputs.compoundFreq} onChange={e => updateInput('compoundFreq', e.target.value)}>
+                                                    <option value="daily">Daily</option>
+                                                    <option value="weekly">Weekly</option>
+                                                    <option value="biweekly">Biweekly</option>
+                                                    <option value="monthly">Monthly</option>
+                                                    <option value="quarterly">Quarterly</option>
+                                                    <option value="semiannually">Semiannually</option>
+                                                    <option value="annually">Annually</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* --- OUTPUT PANEL --- */}
+                        <div className="lg:col-span-7 space-y-6">
+                            {results ? (
+                                <>
+                                    {/* Primary Highlight Card */}
+                                    <div className="bg-gradient-to-br from-brand-600 to-indigo-800 dark:from-slate-800 dark:to-slate-900 rounded-3xl p-8 text-white shadow-xl shadow-brand-500/20 relative overflow-hidden">
+                                        <div className="absolute top-0 right-0 p-12 opacity-10">
+                                            <svg className="w-48 h-48 transform translate-x-12 -translate-y-12" fill="currentColor" viewBox="0 0 20 20"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"></path></svg>
+                                        </div>
+                                        <div className="relative z-10">
+                                            <h3 className="text-brand-100 font-medium tracking-wide uppercase text-sm mb-1">Estimated {inputs.paymentFrequency.charAt(0).toUpperCase() + inputs.paymentFrequency.slice(1).replace(/([A-Z])/g, ' $1').trim()} Payment</h3>
+                                            <div className="text-5xl md:text-6xl font-extrabold tracking-tight mb-6">
+                                                ${results.periodicPayment.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </div>
+
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-6 border-t border-white/20">
+                                                <div>
+                                                    <p className="text-brand-200 text-xs uppercase tracking-wider mb-1">Loan Amount</p>
+                                                    <p className="font-bold text-lg">${results.loanAmount.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-brand-200 text-xs uppercase tracking-wider mb-1">Total Interest</p>
+                                                    <p className="font-bold text-lg">${results.totalInterest.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-brand-200 text-xs uppercase tracking-wider mb-1">Total Cost</p>
+                                                    <p className="font-bold text-lg">${results.totalCost.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-brand-200 text-xs uppercase tracking-wider mb-1">Payoff Date</p>
+                                                    <p className="font-bold text-lg">{results.payoffDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Savings Insights Alert */}
+                                    {savings && savings.interestSaved > 0 && (
+                                        <div className="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-4 flex items-start gap-4">
+                                            <div className="text-emerald-500 dark:text-emerald-400 mt-0.5">
+                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                                            </div>
+                                            <div>
+                                                <h4 className="font-bold text-emerald-800 dark:text-emerald-300">Savings Insight</h4>
+                                                <p className="text-sm text-emerald-700 dark:text-emerald-400 mt-1">
+                                                    By adding <strong>${inputs.extraPayment}</strong> extra per {inputs.paymentFrequency.charAt(0).toUpperCase() + inputs.paymentFrequency.slice(1).replace(/([A-Z])/g, ' $1').trim()}, you save <strong>${savings.interestSaved.toLocaleString('en-US', {maximumFractionDigits:0})}</strong> in interest and shorten your loan by <strong>{savings.periodsSaved}</strong> {inputs.paymentFrequency}s.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Charts Section */}
+                                    <div className="bg-white dark:bg-slate-800 p-6 sm:p-8 rounded-3xl shadow-xl shadow-gray-200/50 dark:shadow-none border border-gray-100 dark:border-slate-700">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <h2 className="text-xl font-bold">Visualizations</h2>
+                                        </div>
+                                        <ChartsRenderer results={results} isDark={isDark} />
+                                    </div>
+
+                                    {/* Amortization Schedule Table */}
+                                    <div className="bg-white dark:bg-slate-800 p-6 sm:p-8 rounded-3xl shadow-xl shadow-gray-200/50 dark:shadow-none border border-gray-100 dark:border-slate-700">
+                                        <div className="flex justify-between items-center mb-6">
+                                            <h2 className="text-xl font-bold">Amortization Schedule</h2>
+                                            <button onClick={exportCSV} className="flex items-center gap-2 text-sm font-medium bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 px-4 py-2 rounded-lg transition-colors">
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                                Export CSV
+                                            </button>
+                                        </div>
+                                        
+                                        <div className="overflow-x-auto custom-scrollbar border border-gray-200 dark:border-slate-700 rounded-xl max-h-96 relative">
+                                            <table className="w-full text-sm text-left">
+                                                <thead className="text-xs text-gray-500 dark:text-gray-400 uppercase bg-gray-50 dark:bg-slate-700 sticky top-0 z-10 shadow-sm">
+                                                    <tr>
+                                                        <th className="px-6 py-4 font-semibold">Pmt #</th>
+                                                        <th className="px-6 py-4 font-semibold">Date</th>
+                                                        <th className="px-6 py-4 font-semibold">Payment</th>
+                                                        <th className="px-6 py-4 font-semibold">Principal</th>
+                                                        <th className="px-6 py-4 font-semibold">Interest</th>
+                                                        <th className="px-6 py-4 font-semibold">Balance</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {results.schedule.map((row, idx) => (
+                                                        <tr key={idx} className="border-b dark:border-slate-700 hover:bg-brand-50 dark:hover:bg-slate-700/50 transition-colors">
+                                                            <td className="px-6 py-3">{row.period}</td>
+                                                            <td className="px-6 py-3 whitespace-nowrap">{row.date.toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' })}</td>
+                                                            <td className="px-6 py-3 font-medium text-brand-600 dark:text-brand-400">${row.payment.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+                                                            <td className="px-6 py-3">${row.principal.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+                                                            <td className="px-6 py-3 text-red-500 dark:text-red-400">${row.interest.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+                                                            <td className="px-6 py-3 font-semibold">${row.balance.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="h-full min-h-[400px] flex flex-col items-center justify-center bg-white dark:bg-slate-800 rounded-3xl border border-gray-100 dark:border-slate-700 text-gray-400">
+                                    <svg className="w-16 h-16 mb-4 text-gray-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                                    <p>Enter loan details to view calculations.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
+
