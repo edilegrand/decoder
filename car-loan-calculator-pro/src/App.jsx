@@ -119,6 +119,9 @@ export default function App() {
     setRate('');
     setTermYears('');
     setTermMonths('');
+    setLoanType('amortizing');
+    setPayFreq(12);
+    setCompoundFreq(12);
     setExtraPayment('');
     setExtraPaymentFreq(12);
     setPropertyTax('');
@@ -329,7 +332,7 @@ export default function App() {
             <div className="flex items-center">
               <Calculator className="h-8 w-8 text-blue-600 dark:text-blue-400 mr-3" />
               <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">
-                Loan Calculator Pro
+                Car Loan Calculator Pro
               </span>
             </div>
             <div className="flex items-center space-x-2">
@@ -464,8 +467,12 @@ export default function App() {
                       value={compoundFreq} onChange={(e) => setCompoundFreq(Number(e.target.value))}
                       className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-transparent dark:text-white outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      <option value={12}>Monthly (Standard US)</option>
-                      <option value={2}>Semi-Annually (Canada)</option>
+                      <option value={365}>Daily</option>
+                      <option value={52}>Weekly</option>
+                      <option value={26}>Bi-weekly</option>
+                      <option value={12}>Monthly</option>
+                      <option value={4}>Quarterly</option>
+                      <option value={2}>Semi-Annually</option>
                       <option value={1}>Annually</option>
                     </select>
                   </InputGroup>
