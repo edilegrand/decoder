@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --color-brand-bg: var(--brand-bg);
+  --color-brand-card: var(--brand-card);
+  --color-brand-input: var(--brand-input);
+  --color-brand-accent: #3b82f6;
+  --color-brand-accent-glow: rgba(59, 130, 246, 0.5);
+  --color-brand-border: var(--brand-border);
+  --color-brand-text-muted: var(--brand-text-muted);
+  --color-brand-text: var(--brand-text);
+}
+
+:root {
+  --brand-bg: #f8fafc;
+  --brand-card: #ffffff;
+  --brand-input: #f1f5f9;
+  --brand-border: #e2e8f0;
+  --brand-text-muted: #64748b;
+  --brand-text: #0f172a;
+}
+
+.dark {
+  --brand-bg: #030712;
+  --brand-card: #0b1120;
+  --brand-input: #111827;
+  --brand-border: #1e293b;
+  --brand-text-muted: #94a3b8;
+  --brand-text: #f1f5f9;
+}
+
+@layer base {
+  body {
+    @apply bg-brand-bg text-brand-text antialiased transition-colors duration-300;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    @apply bg-brand-card/80 backdrop-blur-xl border border-white/5;
+  }
+  
+  .glow-accent {
+    box-shadow: 0 0 20px var(--color-brand-accent-glow);
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: #1e293b;
+    border-radius: 10px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: #334155;
+  }
+}
