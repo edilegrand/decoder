@@ -1,0 +1,7 @@
+{
+  "name": "VoxViral AI Podcast Creator",
+  "description": "A world-class AI podcast production engine that transforms text, links, and documents into high-retention, viral-ready podcast scripts and audio previews.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
